@@ -151,12 +151,12 @@ void parse_fact_chunk(char *data_start_p, Fact_Chunk *fac) {
   memmove(&fac->dw_sample_length, data, sizeof(fac->dw_sample_length));
 }
 
-int main(void) {
+int parse_file(const char *filepath) {
   int file_fd;
   int bytes_read;
   struct stat st;
 
-  if ((file_fd = open("samples/tts-audio.wav", O_RDONLY)) == -1) {
+  if ((file_fd = open(filepath, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening file: %s\n", strerror(errno));
     return 1;
   }
@@ -253,5 +253,32 @@ int main(void) {
 
   free(file_buf);
   close(file_fd);
+  return 0;
+}
+
+static inline void ussage_msg(char **argv) {
+  printf("Ussage: %s [ file_paths ... ]\n", argv[0]);
+}
+
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    ussage_msg(argv);
+    return 1;
+  }
+
+  if (argc == 2) {
+    printf("\tFile info for %s:\n\n", argv[1]);
+    return parse_file(argv[1]); 
+  } else {
+    for (int i = 1; i < argc; i++) {
+      printf("\tFile info for %s:\n\n", argv[i]);
+      if (parse_file(argv[i]) != 0) {
+        fprintf(stderr, "Error parsing file: %s\n", argv[i]);
+        return 1;
+      }
+      puts("\n");
+    }
+  }
+
   return 0;
 }
