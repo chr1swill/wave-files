@@ -2,4 +2,12 @@
 
 set -xe
 
-cc -Wall -Wextra -ggdb -o main main.c
+BIN=bin
+
+if [ -d "$BIN" ]; then
+  rm -rf "$BIN"
+fi
+
+mkdir -p "$BIN"
+
+gcc -Wall -Wextra -ggdb -o ${BIN}/main main.c
