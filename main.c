@@ -30,13 +30,13 @@
   X(SMPL, 0x6C706D73)                                                          \
   X(BEXT, 0x74786562)                                                          \
   X(IXML, 0x4C4D5869)                                                          \
-  X(DS64, 0x34367364)                                                          \
+  X(DS64, 0x34367364)
 
 typedef enum {
 #define X(name, value) name = value,
   CHUNK_IDS
 #undef X
-    INVALID_CHUNK_ID = 0x00000000,
+      INVALID_CHUNK_ID = 0x00000000,
 } Chunk_Id;
 
 Chunk_Id peek_chunk_type(char *data_buffer) {
@@ -74,14 +74,20 @@ void parse_riff_chunk(char *data_start_p, Riff_Chunk *rc) {
   memmove(&rc->wave_id, &data_start_p[8], sizeof(rc->wave_id));
 }
 
+#define CODECS                                                                 \
+  X(UNKNOWN, 0x0000)                                                           \
+  X(PCM, 0x0001)                                                               \
+  X(IEEE_FLOAT, 0x0003)                                                        \
+  X(ALAW, 0x0006)                                                              \
+  X(MULAW, 0x0007)                                                             \
+  X(EXTENSIBLE, 0xFFFE)
+
 typedef enum {
-  WAVE_FORMAT_UNKNOWN = 0x0000,
-  WAVE_FORMAT_PCM = 0x0001,
-  WAVE_FORMAT_IEEE_FLOAT = 0x0003,
-  WAVE_FORMAT_ALAW = 0x0006,
-  WAVE_FORMAT_MULAW = 0x0007,
-  WAVE_FORMAT_EXTENSIBLE = 0xFFFE,
-} Format_Code_Codec;
+#define X(name, value) WAVE_FORMAT_##name = (value),
+
+  CODECS
+#undef X
+} Codec;
 
 typedef struct {
   unsigned int chunk_id;
@@ -207,11 +213,9 @@ int main(void) {
     printf("fc.chunk_size=%d\n", fc.chunk_size);
     printf("fc.format_tag=%d\n", fc.format_tag);
 
-    assert(fc.format_tag == WAVE_FORMAT_PCM ||
-           fc.format_tag == WAVE_FORMAT_IEEE_FLOAT ||
-           fc.format_tag == WAVE_FORMAT_ALAW ||
-           fc.format_tag == WAVE_FORMAT_MULAW ||
-           fc.format_tag == WAVE_FORMAT_EXTENSIBLE);
+#define X(name, value) fc.format_tag == WAVE_FORMAT_##name ||
+    assert(CODECS fc.format_tag == WAVE_FORMAT_UNKNOWN);
+#undef X
 
     switch (fc.format_tag) {
     case WAVE_FORMAT_PCM:
