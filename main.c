@@ -219,9 +219,9 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     return NULL;
   }
 
-  if (fc->format_tag == WAVE_FORMAT_MULAW ||
-      fc->format_tag == WAVE_FORMAT_ALAW && 
-      fc->w_bits_per_sample != 8) {
+  if ((fc->format_tag == WAVE_FORMAT_MULAW ||
+      fc->format_tag == WAVE_FORMAT_ALAW) && 
+      (fc->w_bits_per_sample != 8)) {
     fprintf(stderr,
         "Error format WAVE_FORMAT_MULAW and WAVE_FORMAT_ALAW required w_bits_per_sample to be 8 but got: %d\n", 
         fc->w_bits_per_sample);
