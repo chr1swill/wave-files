@@ -74,9 +74,12 @@ void parse_riff_chunk(char *data_start_p, Riff_Chunk *rc) {
   memmove(&rc->wave_id, &data_start_p[8], sizeof(rc->wave_id));
 }
 
+// if the format is not pcm it must have a fact chunk
+// the non pcm formats must have chunk_size 18 or 40
 #define CODECS                                                                 \
   X(UNKNOWN, 0x0000)                                                           \
   X(PCM, 0x0001)                                                               \
+  X(DPCM, 0x0002) \
   X(IEEE_FLOAT, 0x0003)                                                        \
   X(ALAW, 0x0006)                                                              \
   X(MULAW, 0x0007)                                                             \
@@ -97,7 +100,7 @@ typedef struct {
   unsigned int n_sample_per_sec;    // 8
   unsigned int n_avg_bytes_per_sec; // 12
   unsigned short n_block_align;     // 14
-  unsigned short w_bit_per_sample; // 16 /*if chunk size 16 only read in here */
+  unsigned short w_bits_per_sample; // 16 /*if chunk size 16 only read in here */
   unsigned short cb_size;          // 18 /*if chunk size 18 read in to here */
   unsigned short w_valid_bits_per_sample; // 20
   unsigned int dw_channel_mask;           // 24
@@ -140,10 +143,10 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
 
     data += sizeof(fc->n_block_align);
-    memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+    memmove(&fc->w_bits_per_sample, data, sizeof(fc->w_bits_per_sample));
 
-    data += sizeof(fc->w_bit_per_sample);
-    return data;
+    data += sizeof(fc->w_bits_per_sample);
+    break;
   case 18:
     data += sizeof(fc->format_tag);
     memmove(&fc->n_channels, data, sizeof(fc->n_channels));
@@ -158,9 +161,9 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
 
     data += sizeof(fc->n_block_align);
-    memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+    memmove(&fc->w_bits_per_sample, data, sizeof(fc->w_bits_per_sample));
 
-    data += sizeof(fc->w_bit_per_sample);
+    data += sizeof(fc->w_bits_per_sample);
     memmove(&fc->cb_size, data, sizeof(fc->cb_size));
     assert(fc->cb_size == 0);
     if (fc->cb_size != 0) {
@@ -172,7 +175,7 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     }
 
     data += sizeof(fc->cb_size);
-    return data;
+    break;
   case 40:
     data += sizeof(fc->format_tag);
     memmove(&fc->n_channels, data, sizeof(fc->n_channels));
@@ -187,9 +190,9 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
 
     data += sizeof(fc->n_block_align);
-    memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+    memmove(&fc->w_bits_per_sample, data, sizeof(fc->w_bits_per_sample));
 
-    data += sizeof(fc->w_bit_per_sample);
+    data += sizeof(fc->w_bits_per_sample);
     memmove(&fc->cb_size, data, sizeof(fc->cb_size));
     assert(fc->cb_size == 22);
     if (fc->cb_size != 0) {
@@ -211,10 +214,28 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     memmove(fc->sub_format, data, sizeof(fc->sub_format));
 
     data += sizeof(fc->sub_format);
-    return data;
+    break;
   default:
     return NULL;
   }
+
+  if (fc->format_tag == WAVE_FORMAT_MULAW ||
+      fc->format_tag == WAVE_FORMAT_ALAW && 
+      fc->w_bits_per_sample != 8) {
+    fprintf(stderr,
+        "Error format WAVE_FORMAT_MULAW and WAVE_FORMAT_ALAW required w_bits_per_sample to be 8 but got: %d\n", 
+        fc->w_bits_per_sample);
+    return NULL;
+  }
+
+  if (fc->format_tag == WAVE_FORMAT_EXTENSIBLE &&
+      (8 * fc->n_block_align / fc->n_channels) != fc->w_bits_per_sample) {
+    fprintf(stderr,
+        "Error invalid WAVE_FORMAT_EXTENSIBLE: 8 * fc->n_block_align / fc->n_channels) != fc->w_bits_per_sample\n");
+    return NULL;
+  }
+
+  return data;
 }
 
 typedef struct {
@@ -337,7 +358,7 @@ int parse_file(const char *filepath) {
     printf("fc.n_sample_per_sec=%d\n", fc.n_sample_per_sec);
     printf("fc.n_avg_bytes_per_sec=%d\n", fc.n_avg_bytes_per_sec);
     printf("fc.n_block_align=%d\n", fc.n_block_align);
-    printf("fc.w_bit_per_sample=%d\n", fc.w_bit_per_sample);
+    printf("fc.w_bit_per_sample=%d\n", fc.w_bits_per_sample);
   }
 
   Fact_Chunk fac;
