@@ -79,7 +79,7 @@ void parse_riff_chunk(char *data_start_p, Riff_Chunk *rc) {
 #define CODECS                                                                 \
   X(UNKNOWN, 0x0000)                                                           \
   X(PCM, 0x0001)                                                               \
-  X(DPCM, 0x0002) \
+  X(DPCM, 0x0002)                                                              \
   X(IEEE_FLOAT, 0x0003)                                                        \
   X(ALAW, 0x0006)                                                              \
   X(MULAW, 0x0007)                                                             \
@@ -100,8 +100,9 @@ typedef struct {
   unsigned int n_sample_per_sec;    // 8
   unsigned int n_avg_bytes_per_sec; // 12
   unsigned short n_block_align;     // 14
-  unsigned short w_bits_per_sample; // 16 /*if chunk size 16 only read in here */
-  unsigned short cb_size;          // 18 /*if chunk size 18 read in to here */
+  unsigned short
+      w_bits_per_sample;  // 16 /*if chunk size 16 only read in here */
+  unsigned short cb_size; // 18 /*if chunk size 18 read in to here */
   unsigned short w_valid_bits_per_sample; // 20
   unsigned int dw_channel_mask;           // 24
   unsigned char sub_format[16]; // 40 /* if chunk size 40 read to here */
@@ -216,26 +217,64 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
     data += sizeof(fc->sub_format);
     break;
   default:
+    fprintf(stderr, "Error unknown chunk_size: %d\n", fc->chunk_size);
     return NULL;
+    break;
   }
 
   if ((fc->format_tag == WAVE_FORMAT_MULAW ||
-      fc->format_tag == WAVE_FORMAT_ALAW) && 
+       fc->format_tag == WAVE_FORMAT_ALAW) &&
       (fc->w_bits_per_sample != 8)) {
     fprintf(stderr,
-        "Error format WAVE_FORMAT_MULAW and WAVE_FORMAT_ALAW required w_bits_per_sample to be 8 but got: %d\n", 
-        fc->w_bits_per_sample);
+            "Error format WAVE_FORMAT_MULAW and WAVE_FORMAT_ALAW required "
+            "w_bits_per_sample to be 8 but got: %d\n",
+            fc->w_bits_per_sample);
     return NULL;
   }
 
   if (fc->format_tag == WAVE_FORMAT_EXTENSIBLE &&
       (8 * fc->n_block_align / fc->n_channels) != fc->w_bits_per_sample) {
     fprintf(stderr,
-        "Error invalid WAVE_FORMAT_EXTENSIBLE: 8 * fc->n_block_align / fc->n_channels) != fc->w_bits_per_sample\n");
+            "Error invalid WAVE_FORMAT_EXTENSIBLE: 8 * fc->n_block_align / "
+            "fc->n_channels) != fc->w_bits_per_sample\n");
     return NULL;
   }
 
   return data;
+}
+
+static inline void Fmt_Chunk_dump(Fmt_Chunk *fc) {
+  assert(FMT == fc->chunk_id);
+  printf("Fmt_Chunk->chunk_size=%d\n", fc->chunk_size);
+  printf("Fmt_Chunk->format_tag=%d\n", fc->format_tag);
+
+#define X(name, value) fc->format_tag == WAVE_FORMAT_##name ||
+  assert(CODECS fc->format_tag == WAVE_FORMAT_UNKNOWN);
+#undef X
+
+  switch (fc->format_tag) {
+  case WAVE_FORMAT_PCM:
+    printf("format_tag=WAVE_FORMAT_PCM\n");
+    break;
+  case WAVE_FORMAT_IEEE_FLOAT:
+    printf("format_tag=WAVE_FORMAT_IEEE_FLOAT\n");
+    break;
+  case WAVE_FORMAT_ALAW:
+    printf("format_tag=WAVE_FORMAT_ALAW\n");
+    break;
+  case WAVE_FORMAT_MULAW:
+    printf("format_tag=WAVE_FORMAT_MULAW\n");
+    break;
+  case WAVE_FORMAT_EXTENSIBLE:
+    printf("format_tag=WAVE_FORMAT_EXTENSIBLE\n");
+    break;
+  }
+
+  printf("Fmt_Chunk->n_channels=%d\n", fc->n_channels);
+  printf("Fmt_Chunk->n_sample_per_sec=%d\n", fc->n_sample_per_sec);
+  printf("Fmt_Chunk->n_avg_bytes_per_sec=%d\n", fc->n_avg_bytes_per_sec);
+  printf("Fmt_Chunk->n_block_align=%d\n", fc->n_block_align);
+  printf("Fmt_Chunk->w_bit_per_sample=%d\n", fc->w_bits_per_sample);
 }
 
 typedef struct {
@@ -244,20 +283,20 @@ typedef struct {
   unsigned int dw_sample_length;
 } Fact_Chunk;
 
-#define FACT_CHUNK_START 38 // FMT_CHUNK_START + sizeof(Fmt_chunk)
-
-void parse_fact_chunk(char *data_start_p, Fact_Chunk *fac) {
-  memset(fac, 0, sizeof(*fac));
-
-  char *data = &data_start_p[FACT_CHUNK_START];
-  memmove(&fac->chunk_id, data, sizeof(fac->chunk_id));
-
-  data += sizeof(fac->chunk_id);
-  memmove(&fac->chunk_size, data, sizeof(fac->chunk_size));
-
-  data += sizeof(fac->chunk_size);
-  memmove(&fac->dw_sample_length, data, sizeof(fac->dw_sample_length));
-}
+// #define FACT_CHUNK_START 38 // FMT_CHUNK_START + sizeof(Fmt_chunk)
+//
+// void parse_fact_chunk(char *data_start_p, Fact_Chunk *fac) {
+//   memset(fac, 0, sizeof(*fac));
+//
+//   char *data = &data_start_p[FACT_CHUNK_START];
+//   memmove(&fac->chunk_id, data, sizeof(fac->chunk_id));
+//
+//   data += sizeof(fac->chunk_id);
+//   memmove(&fac->chunk_size, data, sizeof(fac->chunk_size));
+//
+//   data += sizeof(fac->chunk_size);
+//   memmove(&fac->dw_sample_length, data, sizeof(fac->dw_sample_length));
+// }
 
 int parse_file(const char *filepath) {
   int file_fd;
@@ -313,62 +352,31 @@ int parse_file(const char *filepath) {
     DEBUG_PRINT_STR(&rc.wave_id);
     assert(WAVE == rc.wave_id);
     printf("rc.wave_chunks=%d\n", rc.wave_chunks);
+    puts("");
   }
 
   Fmt_Chunk fc;
   char *p_next_chunk_start = parse_fmt_chunk(file_buf, &fc);
-  if (p_next_chunk_start) {
+  if (p_next_chunk_start == NULL) {
     fprintf(stderr, "Error occured while parsing 'fmt ' chunk\n");
+    puts("");
+    Fmt_Chunk_dump(&fc);
     return 1;
   }
 
-//  switch (check_chunk_id(p_next_chunk_start)) {
-//    case DATA: break;
-//  }
-
   if (DEBUG) {
-    DEBUG_PRINT_STR(&fc.chunk_id);
-    assert(FMT == fc.chunk_id);
-    printf("fc.chunk_size=%d\n", fc.chunk_size);
-    printf("fc.format_tag=%d\n", fc.format_tag);
-
-#define X(name, value) fc.format_tag == WAVE_FORMAT_##name ||
-    assert(CODECS fc.format_tag == WAVE_FORMAT_UNKNOWN);
-#undef X
-
-    switch (fc.format_tag) {
-    case WAVE_FORMAT_PCM:
-      printf("format_tag=WAVE_FORMAT_PCM\n");
-      break;
-    case WAVE_FORMAT_IEEE_FLOAT:
-      printf("format_tag=WAVE_FORMAT_IEEE_FLOAT\n");
-      break;
-    case WAVE_FORMAT_ALAW:
-      printf("format_tag=WAVE_FORMAT_ALAW\n");
-      break;
-    case WAVE_FORMAT_MULAW:
-      printf("format_tag=WAVE_FORMAT_MULAW\n");
-      break;
-    case WAVE_FORMAT_EXTENSIBLE:
-      printf("format_tag=WAVE_FORMAT_EXTENSIBLE\n");
-      break;
-    }
-
-    printf("fc.n_channels=%d\n", fc.n_channels);
-    printf("fc.n_sample_per_sec=%d\n", fc.n_sample_per_sec);
-    printf("fc.n_avg_bytes_per_sec=%d\n", fc.n_avg_bytes_per_sec);
-    printf("fc.n_block_align=%d\n", fc.n_block_align);
-    printf("fc.w_bit_per_sample=%d\n", fc.w_bits_per_sample);
+    Fmt_Chunk_dump(&fc);
+    puts("");
   }
 
-  Fact_Chunk fac;
-  parse_fact_chunk(file_buf, &fac);
-  if (DEBUG) {
-    DEBUG_PRINT_STR(&fac.chunk_id);
-    assert(FACT == fac.chunk_id);
-    printf("fac.chunk_size=%d\n", fac.chunk_size);
-    printf("fac.dw_sample_length=%d\n", fac.dw_sample_length);
-  }
+  // Fact_Chunk fac;
+  // parse_fact_chunk(file_buf, &fac);
+  // if (DEBUG) {
+  //   DEBUG_PRINT_STR(&fac.chunk_id);
+  //   assert(FACT == fac.chunk_id);
+  //   printf("fac.chunk_size=%d\n", fac.chunk_size);
+  //   printf("fac.dw_sample_length=%d\n", fac.dw_sample_length);
+  // }
 
   free(file_buf);
   close(file_fd);
