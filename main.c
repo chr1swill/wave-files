@@ -39,7 +39,7 @@ typedef enum {
       INVALID_CHUNK_ID = 0x00000000,
 } Chunk_Id;
 
-Chunk_Id check_chunk_type(char *data_buffer) {
+Chunk_Id check_chunk_id(char *data_buffer) {
   unsigned int chunk_id = *(unsigned int *)data_buffer;
   switch (chunk_id) {
 #define X(name, value)                                                         \
@@ -119,7 +119,7 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
   data += sizeof(fc->chunk_size);
   memmove(&fc->format_tag, data, sizeof(fc->format_tag));
   assert(fc->chunk_size == 16 || fc->chunk_size == 18 || fc->chunk_size == 40);
-  if (fc->chunk_size != 16 || fc->chunk_size != 18 || fc->chunk_size != 40) {
+  if (fc->chunk_size != 16 && fc->chunk_size != 18 && fc->chunk_size != 40) {
     fprintf(stderr, "Error invalid chunk size in 'fmt ' chunk: %d\n",
             fc->chunk_size);
     return NULL;
@@ -255,7 +255,7 @@ int parse_file(const char *filepath) {
     return 1;
   }
 
-  char *file_buf = malloc(sizeof(char) * st.st_size);
+  char *file_buf = (char *)malloc(sizeof(char) * st.st_size);
   if (file_buf == NULL) {
     fprintf(stderr, "Error allocating memory for file buf of size: %lu\n",
             st.st_size);
@@ -264,6 +264,7 @@ int parse_file(const char *filepath) {
 
   if ((bytes_read = read(file_fd, file_buf, st.st_size)) == -1) {
     fprintf(stderr, "Error reading file to buffer: %s\n", strerror(errno));
+    free(file_buf);
     close(file_fd);
     return 1;
   } else if (bytes_read < st.st_size) {
@@ -274,6 +275,7 @@ int parse_file(const char *filepath) {
                 "Error reading file, could only ready %d of %zu bytes of file: "
                 "%s\n",
                 bytes_read, st.st_size, strerror(errno));
+        free(file_buf);
         close(file_fd);
         return 1;
       }
@@ -298,6 +300,10 @@ int parse_file(const char *filepath) {
     fprintf(stderr, "Error occured while parsing 'fmt ' chunk\n");
     return 1;
   }
+
+//  switch (check_chunk_id(p_next_chunk_start)) {
+//    case DATA: break;
+//  }
 
   if (DEBUG) {
     DEBUG_PRINT_STR(&fc.chunk_id);
