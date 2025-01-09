@@ -39,7 +39,7 @@ typedef enum {
       INVALID_CHUNK_ID = 0x00000000,
 } Chunk_Id;
 
-Chunk_Id peek_chunk_type(char *data_buffer) {
+Chunk_Id check_chunk_type(char *data_buffer) {
   unsigned int chunk_id = *(unsigned int *)data_buffer;
   switch (chunk_id) {
 #define X(name, value)                                                         \
@@ -106,7 +106,7 @@ typedef struct {
 
 #define FMT_CHUNK_START 12
 
-// returns pointer to end of fmt chunk
+// returns pointer to start of next chunk
 char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
   memset(fc, 0, sizeof(*fc));
 
@@ -212,8 +212,9 @@ char *parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
 
     data += sizeof(fc->sub_format);
     return data;
+  default:
+    return NULL;
   }
-  return NULL;
 }
 
 typedef struct {
