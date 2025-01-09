@@ -91,18 +91,23 @@ typedef enum {
 
 typedef struct {
   unsigned int chunk_id;
-  unsigned int chunk_size;
-  unsigned short format_tag;
-  unsigned short n_channels;
-  unsigned int n_sample_per_sec;
-  unsigned int n_avg_bytes_per_sec;
-  unsigned short n_block_align;
-  unsigned short w_bit_per_sample;
+  unsigned int chunk_size;          /* must be { 16, 18 , 40 } */
+  unsigned short format_tag;        // 2
+  unsigned short n_channels;        // 4
+  unsigned int n_sample_per_sec;    // 8
+  unsigned int n_avg_bytes_per_sec; // 12
+  unsigned short n_block_align;     // 14
+  unsigned short w_bit_per_sample; // 16 /*if chunk size 16 only read in here */
+  unsigned short cb_size;          // 18 /*if chunk size 18 read in to here */
+  unsigned short w_valid_bits_per_sample; // 20
+  unsigned int dw_channel_mask;           // 24
+  unsigned char sub_format[16]; // 40 /* if chunk size 40 read to here */
 } Fmt_Chunk;
 
 #define FMT_CHUNK_START 12
 
-void parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
+// returns pointer to end of fmt chunk
+char* parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
   memset(fc, 0, sizeof(*fc));
 
   char *data = &data_start_p[FMT_CHUNK_START];
@@ -113,21 +118,98 @@ void parse_fmt_chunk(char *data_start_p, Fmt_Chunk *fc) {
 
   data += sizeof(fc->chunk_size);
   memmove(&fc->format_tag, data, sizeof(fc->format_tag));
+  assert(fc->chunk_size == 16 || fc->chunk_size == 18 || fc->chunk_size == 40);
+  if (fc->chunk_size != 16 || fc->chunk_size != 18 || fc->chunk_size != 40) {
+    fprintf(stderr, "Error invalid chunk size in 'fmt ' chunk: %d\n", fc->chunk_size);
+    return NULL;
+  }
 
-  data += sizeof(fc->format_tag);
-  memmove(&fc->n_channels, data, sizeof(fc->n_channels));
+  switch (fc->chunk_size) {
+    case 16: 
+      data += sizeof(fc->format_tag);
+      memmove(&fc->n_channels, data, sizeof(fc->n_channels));
 
-  data += sizeof(fc->n_channels);
-  memmove(&fc->n_sample_per_sec, data, sizeof(fc->n_sample_per_sec));
+      data += sizeof(fc->n_channels);
+      memmove(&fc->n_sample_per_sec, data, sizeof(fc->n_sample_per_sec));
 
-  data += sizeof(fc->n_sample_per_sec);
-  memmove(&fc->n_avg_bytes_per_sec, data, sizeof(fc->n_avg_bytes_per_sec));
+      data += sizeof(fc->n_sample_per_sec);
+      memmove(&fc->n_avg_bytes_per_sec, data, sizeof(fc->n_avg_bytes_per_sec));
 
-  data += sizeof(fc->n_avg_bytes_per_sec);
-  memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
+      data += sizeof(fc->n_avg_bytes_per_sec);
+      memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
 
-  data += sizeof(fc->n_block_align);
-  memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+      data += sizeof(fc->n_block_align);
+      memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+
+      data += sizeof(fc->w_bit_per_sample);
+      return data;
+    case 18: 
+      data += sizeof(fc->format_tag);
+      memmove(&fc->n_channels, data, sizeof(fc->n_channels));
+
+      data += sizeof(fc->n_channels);
+      memmove(&fc->n_sample_per_sec, data, sizeof(fc->n_sample_per_sec));
+
+      data += sizeof(fc->n_sample_per_sec);
+      memmove(&fc->n_avg_bytes_per_sec, data, sizeof(fc->n_avg_bytes_per_sec));
+
+      data += sizeof(fc->n_avg_bytes_per_sec);
+      memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
+
+      data += sizeof(fc->n_block_align);
+      memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+
+      data += sizeof(fc->w_bit_per_sample);
+      memmove(&fc->cb_size, data, sizeof(fc->cb_size));
+      assert(fc->cb_size == 0);
+      if (fc->cb_size != 0) {
+        fprintf(stderr, 
+            "Error 'fmt ' chunk_size specified chunk size 18 but cb_size did not match this conclusion: %d\n",
+            fc->cb_size); 
+        return NULL;
+      }
+
+      data += sizeof(fc->cb_size);
+      return data;
+    case 40: 
+      data += sizeof(fc->format_tag);
+      memmove(&fc->n_channels, data, sizeof(fc->n_channels));
+
+      data += sizeof(fc->n_channels);
+      memmove(&fc->n_sample_per_sec, data, sizeof(fc->n_sample_per_sec));
+
+      data += sizeof(fc->n_sample_per_sec);
+      memmove(&fc->n_avg_bytes_per_sec, data, sizeof(fc->n_avg_bytes_per_sec));
+
+      data += sizeof(fc->n_avg_bytes_per_sec);
+      memmove(&fc->n_block_align, data, sizeof(fc->n_block_align));
+
+      data += sizeof(fc->n_block_align);
+      memmove(&fc->w_bit_per_sample, data, sizeof(fc->w_bit_per_sample));
+
+      data += sizeof(fc->w_bit_per_sample);
+      memmove(&fc->cb_size, data, sizeof(fc->cb_size));
+      assert(fc->cb_size == 22);
+      if (fc->cb_size != 0) {
+        fprintf(stderr, 
+            "Error 'fmt ' chunk_size specified chunk size 18 but cb_size did not match this conclusion: %d\n",
+            fc->cb_size); 
+        return NULL;
+      }
+
+      data += sizeof(fc->cb_size);
+      memmove(&fc->w_valid_bits_per_sample, data, sizeof(fc->w_valid_bits_per_sample));
+
+      data += sizeof(fc->w_valid_bits_per_sample);
+      memmove(&fc->dw_channel_mask, data, sizeof(fc->dw_channel_mask));
+
+      data += sizeof(fc->dw_channel_mask);
+      memmove(fc->sub_format, data, sizeof(fc->sub_format));
+
+      data += sizeof(fc->sub_format);
+      return data;
+  }
+  return NULL;
 }
 
 typedef struct {
@@ -206,7 +288,12 @@ int parse_file(const char *filepath) {
   }
 
   Fmt_Chunk fc;
-  parse_fmt_chunk(file_buf, &fc);
+  char *p_next_chunk_start = parse_fmt_chunk(file_buf, &fc);
+  if (p_next_chunk_start) {
+    fprintf(stderr, "Error occured while parsing 'fmt ' chunk\n");
+    return 1;
+  }
+
   if (DEBUG) {
     DEBUG_PRINT_STR(&fc.chunk_id);
     assert(FMT == fc.chunk_id);
@@ -268,7 +355,7 @@ int main(int argc, char **argv) {
 
   if (argc == 2) {
     printf("\tFile info for %s:\n\n", argv[1]);
-    return parse_file(argv[1]); 
+    return parse_file(argv[1]);
   } else {
     for (int i = 1; i < argc; i++) {
       printf("\tFile info for %s:\n\n", argv[i]);
