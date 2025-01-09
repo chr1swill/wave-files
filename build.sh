@@ -1,9 +1,9 @@
-!#/bin/sh
+#!/bin/sh
 
 set -xe
 
 BIN=bin
-CC=clang++
+CC=clang
 
 if [ -d "$BIN" ]; then
   rm -rf "$BIN"
