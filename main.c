@@ -283,21 +283,6 @@ typedef struct {
   unsigned int dw_sample_length;
 } Fact_Chunk;
 
-// #define FACT_CHUNK_START 38 // FMT_CHUNK_START + sizeof(Fmt_chunk)
-//
-// void parse_fact_chunk(char *data_start_p, Fact_Chunk *fac) {
-//   memset(fac, 0, sizeof(*fac));
-//
-//   char *data = &data_start_p[FACT_CHUNK_START];
-//   memmove(&fac->chunk_id, data, sizeof(fac->chunk_id));
-//
-//   data += sizeof(fac->chunk_id);
-//   memmove(&fac->chunk_size, data, sizeof(fac->chunk_size));
-//
-//   data += sizeof(fac->chunk_size);
-//   memmove(&fac->dw_sample_length, data, sizeof(fac->dw_sample_length));
-// }
-
 int parse_file(const char *filepath) {
   int file_fd;
   int bytes_read;
@@ -368,15 +353,6 @@ int parse_file(const char *filepath) {
     Fmt_Chunk_dump(&fc);
     puts("");
   }
-
-  // Fact_Chunk fac;
-  // parse_fact_chunk(file_buf, &fac);
-  // if (DEBUG) {
-  //   DEBUG_PRINT_STR(&fac.chunk_id);
-  //   assert(FACT == fac.chunk_id);
-  //   printf("fac.chunk_size=%d\n", fac.chunk_size);
-  //   printf("fac.dw_sample_length=%d\n", fac.dw_sample_length);
-  // }
 
   free(file_buf);
   close(file_fd);
